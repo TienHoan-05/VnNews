@@ -12,10 +12,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.vnnews.ui.MainViewModel
 import com.example.vnnews.ui.navigation.NewsApp
@@ -29,6 +31,12 @@ class MainActivity : ComponentActivity() {
             val mainViewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
             val isDarkThemePref by mainViewModel.isDarkTheme.collectAsState()
             val isDarkTheme = isDarkThemePref ?: isSystemInDarkTheme()
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !isDarkTheme
+                    isAppearanceLightNavigationBars = !isDarkTheme
+                }
+            }
 
             RequestNotificationPermissionEffect()
 

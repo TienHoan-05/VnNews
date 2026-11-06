@@ -14,8 +14,24 @@ data class RssItemDto(
     @SerializedName("guid") val guid: String? = null,
     @SerializedName("thumbnail") val thumbnail: String? = null,
     @SerializedName("description") val description: String? = null,
-    @SerializedName("enclosure") val enclosure: EnclosureDto? = null
+    @SerializedName("enclosure") val enclosure: EnclosureDto? = null,
+    val sourceName: String? = null
 ) {
+    val displayTitle: String by lazy(LazyThreadSafetyMode.PUBLICATION) { NewsText.title(title) }
+    private val cachedDescription: String by lazy(LazyThreadSafetyMode.PUBLICATION) { NewsText.description(description) }
+    private val publicationTime by lazy(LazyThreadSafetyMode.PUBLICATION) { NewsDates.parse(pubDate) }
+    fun publisher(): String = sourceName ?: runCatching {
+        val host = java.net.URI(link).host.orEmpty().removePrefix("www.")
+        when (host) {
+            "vnexpress.net" -> "VnExpress"
+            "tuoitre.vn" -> "Tuổi Trẻ"
+            "thanhnien.vn" -> "Thanh Niên"
+            "dantri.com.vn" -> "Dân trí"
+            else -> host
+        }
+    }.getOrDefault("")
+
+    fun publishedAt(): java.time.Instant? = publicationTime
     fun getImageUrl(): String? {
         if (!thumbnail.isNullOrBlank()) return thumbnail
         if (!enclosure?.link.isNullOrBlank()) return enclosure?.link
@@ -28,7 +44,7 @@ data class RssItemDto(
     }
 
     fun getCleanDescription(): String {
-        return description?.replace(Regex("<.*?>"), "")?.trim() ?: ""
+        return cachedDescription
     }
 }
 

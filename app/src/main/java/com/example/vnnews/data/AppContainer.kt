@@ -9,6 +9,10 @@ import com.example.vnnews.data.remote.NewsApiService
 import com.example.vnnews.data.remote.VnExpressRawApi
 import com.example.vnnews.data.repository.NetworkNewsRepository
 import com.example.vnnews.data.repository.NewsRepository
+import com.example.vnnews.data.repository.WeatherRepository
+import com.example.vnnews.data.repository.OpenMeteoWeatherRepository
+import com.example.vnnews.data.repository.DeviceLocationProvider
+import com.example.vnnews.data.repository.AndroidDeviceLocationProvider
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -16,11 +20,20 @@ import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 
 interface AppContainer {
+    val deviceLocationProvider: DeviceLocationProvider
+    val weatherRepository: WeatherRepository
     val newsRepository: NewsRepository
     val userPreferencesRepository: UserPreferencesRepository
 }
 
 class DefaultAppContainer(private val context: Context) : AppContainer {
+    override val deviceLocationProvider: DeviceLocationProvider by lazy { AndroidDeviceLocationProvider(context.applicationContext) }
+    override val weatherRepository: WeatherRepository by lazy {
+        val client = okHttpClient.newBuilder().apply {
+            interceptors().removeAll { it is HttpLoggingInterceptor }
+        }.build()
+        OpenMeteoWeatherRepository(client)
+    }
     private val baseUrl = "https://vnexpress.net/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {

@@ -13,6 +13,7 @@ data class NewsCategory(
 )
 
 interface NewsRepository {
+    fun getSources(): List<NewsSource> = emptyList()
     fun getCategories(): List<NewsCategory>
     suspend fun getNews(categoryRssUrl: String): List<RssItemDto>
     fun getBookmarkedArticles(): Flow<List<ArticleEntity>>
@@ -25,6 +26,7 @@ class NetworkNewsRepository(
     private val newsApiService: NewsApiService,
     private val articleDao: ArticleDao
 ) : NewsRepository {
+    override fun getSources(): List<NewsSource> = NewsSources.all
 
     override fun getCategories(): List<NewsCategory> = listOf(
         NewsCategory("tin-moi-nhat", "Mới nhất", "https://vnexpress.net/rss/tin-noi-bat.rss"),
@@ -54,7 +56,7 @@ class NetworkNewsRepository(
         } else {
             val entity = ArticleEntity(
                 link = item.link,
-                title = item.title,
+                title = item.displayTitle,
                 pubDate = item.pubDate,
                 description = item.getCleanDescription(),
                 imageUrl = item.getImageUrl(),

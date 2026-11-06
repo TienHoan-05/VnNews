@@ -11,6 +11,9 @@ import com.example.vnnews.data.local.UserPreferencesRepository
 import com.example.vnnews.data.remote.RssItemDto
 import com.example.vnnews.data.repository.NewsCategory
 import com.example.vnnews.data.repository.NewsRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +29,8 @@ sealed interface HomeUiState {
         val articles: List<RssItemDto>,
         val categories: List<NewsCategory>,
         val selectedCategory: NewsCategory,
-        val bookmarkedUrls: Set<String> = emptySet()
+        val bookmarkedUrls: Set<String> = emptySet(),
+        val unavailableSources: List<String> = emptyList()
     ) : HomeUiState
     data class Error(val message: String) : HomeUiState
 }
@@ -41,7 +45,19 @@ class HomeViewModel(
 
     private val categories = newsRepository.getCategories()
     private var currentCategory = categories.first()
+    private val _selectedCategory = MutableStateFlow(currentCategory)
+    val selectedCategory = _selectedCategory.asStateFlow()
     private var fetchJob: Job? = null
+    val sources = newsRepository.getSources()
+    private val _selectedSource = MutableStateFlow<String?>(null)
+    val selectedSource = _selectedSource.asStateFlow()
+    val categoriesList get() = categories
+
+    fun selectSource(id: String?) {
+        if (_selectedSource.value == id) return
+        _selectedSource.value = id
+        loadNews(currentCategory)
+    }
 
     init {
         observeBookmarks()
@@ -59,6 +75,7 @@ class HomeViewModel(
             }
             val initialCategory = categories.find { it.id == savedCategoryId } ?: categories.first()
             currentCategory = initialCategory
+            _selectedCategory.value = initialCategory
             loadNews(initialCategory)
         }
     }
@@ -78,6 +95,7 @@ class HomeViewModel(
     fun selectCategory(category: NewsCategory) {
         if (currentCategory.id == category.id && _uiState.value is HomeUiState.Success) return
         currentCategory = category
+        _selectedCategory.value = category
         viewModelScope.launch {
             try {
                 userPreferencesRepository?.saveSelectedCategory(category.id)
@@ -105,7 +123,22 @@ class HomeViewModel(
         fetchJob?.cancel()
         fetchJob = viewModelScope.launch {
             try {
-                val articles = newsRepository.getNews(category.rssUrl)
+                val selected = sources.filter { _selectedSource.value == null || it.id == _selectedSource.value }
+                val failed = mutableListOf<String>()
+                val articles = if (selected.isEmpty()) newsRepository.getNews(category.rssUrl) else coroutineScope {
+                    selected.map { source -> async {
+                        try {
+                            val url = source.feeds[category.id] ?: error("Chưa có chuyên mục")
+                            newsRepository.getNews(url).also { if (it.isEmpty()) error("Nguồn chưa có tin") }
+                                .map { it.copy(sourceName = source.title) } to null
+                        } catch (e: CancellationException) { throw e
+                        } catch (e: Exception) { emptyList<RssItemDto>() to source.title }
+                    } }.awaitAll().flatMap { (items, failure) ->
+                        failure?.let { failed.add(it) }
+                        items
+                    }.sortedByDescending { it.publishedAt() ?: java.time.Instant.EPOCH }.distinctBy { it.link }
+                }
+                if (articles.isEmpty() && failed.isNotEmpty()) throw IOException("Không tải được nguồn báo")
                 val bookmarkedUrls = try {
                     newsRepository.getBookmarkedArticles().first().map { it.link }.toSet()
                 } catch (e: CancellationException) {
@@ -117,7 +150,8 @@ class HomeViewModel(
                     articles = articles,
                     categories = categories,
                     selectedCategory = category,
-                    bookmarkedUrls = bookmarkedUrls
+                    bookmarkedUrls = bookmarkedUrls,
+                    unavailableSources = failed
                 )
             } catch (e: CancellationException) {
                 throw e

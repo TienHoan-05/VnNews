@@ -10,7 +10,7 @@ object VnExpressRssParser {
         val factory = XmlPullParserFactory.newInstance()
         factory.isNamespaceAware = false
         val parser = factory.newPullParser()
-        parser.setInput(inputStream, "UTF-8")
+        parser.setInput(inputStream, null)
 
         var eventType = parser.eventType
         var title = ""
@@ -34,7 +34,7 @@ object VnExpressRssParser {
                         guid = ""
                         description = ""
                         enclosureUrl = null
-                    } else if (inItem && currentTag.equals("enclosure", ignoreCase = true)) {
+                    } else if (inItem && currentTag.lowercase() in listOf("enclosure", "media:thumbnail", "media:content")) {
                         val url = parser.getAttributeValue(null, "url")
                         if (!url.isNullOrBlank()) {
                             enclosureUrl = url
@@ -58,7 +58,7 @@ object VnExpressRssParser {
                         if (title.isNotBlank() && link.isNotBlank()) {
                             items.add(
                                 RssItemDto(
-                                    title = title.trim(),
+                                    title = NewsText.title(title),
                                     pubDate = pubDate.trim(),
                                     link = link.trim(),
                                     guid = guid.trim().ifBlank { link.trim() },

@@ -19,6 +19,8 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
     private companion object {
         val IS_DARK_THEME = booleanPreferencesKey("is_dark_theme")
         val SELECTED_CATEGORY = stringPreferencesKey("selected_category")
+        val WEATHER_CITY = stringPreferencesKey("weather_city")
+        val WEATHER_DEVICE_LOCATION = booleanPreferencesKey("weather_device_location")
     }
 
     val isDarkTheme: Flow<Boolean?> = dataStore.data
@@ -45,5 +47,21 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { preferences ->
             preferences[SELECTED_CATEGORY] = category
         }
+    }
+
+    val weatherCity: Flow<String> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[WEATHER_CITY] ?: "hcm" }
+
+    suspend fun saveWeatherCity(id: String) {
+        dataStore.edit { it[WEATHER_CITY] = id }
+    }
+
+    val weatherDeviceLocation: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[WEATHER_DEVICE_LOCATION] ?: false }
+
+    suspend fun saveWeatherDeviceLocation(enabled: Boolean) {
+        dataStore.edit { it[WEATHER_DEVICE_LOCATION] = enabled }
     }
 }
